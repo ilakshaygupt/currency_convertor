@@ -27,7 +27,6 @@ class CurrencyConverterScreen extends StatefulWidget {
   const CurrencyConverterScreen({Key? key}) : super(key: key);
 
   @override
-  // ignore: library_private_types_in_public_api
   _CurrencyConverterScreenState createState() =>
       _CurrencyConverterScreenState();
 }
@@ -37,33 +36,38 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
   String _baseCurrency = 'USD';
   String _targetCurrency = 'EUR';
   final TextEditingController _amountController = TextEditingController();
+  Future<List<String>>? _currenciesFuture;
   List<String> _currencies = [];
-  Future<void> _fetchCurrencies() async {
+
+  Future<List<String>> _fetchCurrencies() async {
     try {
       final response = await http.get(Uri.parse(
-          'https://v6.exchangerate-api.com/v6/e098e56ac399d404a3d45bbd/latest/$_baseCurrency'));
+          'https://v6.exchangerate-api.com/v6/e098e56ac399d404a3d45bbd/latest/USD'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data != null && data['conversion_rates'] != null) {
           Map<String, dynamic> rates = data['conversion_rates'];
-          _currencies = rates.keys.toList();
+          return rates.keys.toList();
         } else {
           print('API response data is null or conversion_rates is null');
+          return [];
         }
       } else {
         print(
             'Failed to fetch conversion rate. Status code: ${response.statusCode}');
+        return [];
       }
     } catch (e) {
       print('Error fetching currencies: $e');
+      return [];
     }
   }
 
-  @override
-  void initState() {
-    super.initState();
-    _fetchCurrencies();
-  }
+  // @override
+  // void initState() {
+  //   super.initState();
+  //   _currenciesFuture = _fetchCurrencies();
+  // }
 
   @override
   Widget build(BuildContext context) {
@@ -84,40 +88,55 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: DropdownSearch<String>(
-                    popupProps: const PopupProps.bottomSheet(
-                      bottomSheetProps: BottomSheetProps(),
-                      showSearchBox: true,
-                    ),
-                    items: _currencies,
-                    onChanged: (value) {
-                      setState(() {
-                        _baseCurrency = value!;
-                      });
-                    },
-                    selectedItem: _baseCurrency,
-                  ),
-                ),
-                const Icon(Icons.arrow_forward),
-                Expanded(
-                  child: DropdownSearch<String>(
-                    popupProps: const PopupProps.bottomSheet(
-                        bottomSheetProps: BottomSheetProps(),
-                        showSearchBox: true),
-                    items: _currencies,
-                    onChanged: (value) {
-                      setState(() {
-                        _targetCurrency = value!;
-                      });
-                    },
-                    selectedItem: _targetCurrency,
-                  ),
-                ),
-              ],
+            FutureBuilder<List<String>>(
+              future: _fetchCurrencies(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return CircularProgressIndicator();
+                } else if (snapshot.hasError ||
+                    !snapshot.hasData ||
+                    snapshot.data!.isEmpty) {
+                  return Text('Error fetching currencies');
+                } else {
+                  _currencies = snapshot.data!;
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: DropdownSearch<String>(
+                          popupProps: const PopupProps.bottomSheet(
+                            bottomSheetProps: BottomSheetProps(),
+                            showSearchBox: true,
+                          ),
+                          items: _currencies,
+                          onChanged: (value) {
+                            setState(() {
+                              _baseCurrency = value!;
+                            });
+                          },
+                          selectedItem: _baseCurrency,
+                        ),
+                      ),
+                      const Icon(Icons.arrow_forward),
+                      Expanded(
+                        child: DropdownSearch<String>(
+                          popupProps: const PopupProps.bottomSheet(
+                            bottomSheetProps: BottomSheetProps(),
+                            showSearchBox: true,
+                          ),
+                          items: _currencies,
+                          onChanged: (value) {
+                            setState(() {
+                              _targetCurrency = value!;
+                            });
+                          },
+                          selectedItem: _targetCurrency,
+                        ),
+                      ),
+                    ],
+                  );
+                }
+              },
             ),
             const SizedBox(height: 20),
             ElevatedButton(
